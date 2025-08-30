@@ -13,7 +13,7 @@ jobs:
     continue-on-error: true
     outputs:
       step-outcome: ${{ steps.intentional-failure.outcome }}
-      error-log: ${{ steps.intentional-failure.outputs.error }}
+      error-type: ${{ steps.intentional-failure.outputs.error }}
     
     steps:
     - name: Checkout code
@@ -23,11 +23,7 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install requests pandas numpy
+        cache: 'pip'
         
     - name: Intentional Failure Step
       id: intentional-failure
@@ -73,19 +69,6 @@ jobs:
             ;;
         esac
 
-    - name: Capture Error Details
-      if: failure()
-      id: capture-error
-      run: |
-        echo "Capturing detailed error information..."
-        echo "Workflow: ${{ github.workflow }}"
-        echo "Job: ${{ github.job }}"
-        echo "Step: Intentional Failure Step"
-        echo "Repository: ${{ github.repository }}"
-        echo "Branch: ${{ github.ref_name }}"
-        echo "Commit: ${{ github.sha }}"
-        echo "Actor: ${{ github.actor }}"
-        echo "Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
   chatgpt-troubleshooting:
     runs-on: ubuntu-latest
@@ -100,15 +83,18 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+        cache: 'pip'
         
-    - name: Install OpenAI
+    - name: Install dependencies
       run: |
+        python -m pip install --upgrade pip
         pip install openai requests
         
     - name: ChatGPT Troubleshooting
       id: troubleshoot
+      timeout-minutes: 5
       env:
-        ERROR_TYPE: ${{ needs.failing-step.outputs.error-log }}
+        ERROR_TYPE: ${{ needs.failing-step.outputs.error-type }}
         WORKFLOW_NAME: ${{ github.workflow }}
         REPOSITORY: ${{ github.repository }}
         BRANCH: ${{ github.ref_name }}
@@ -118,10 +104,12 @@ jobs:
         python3 scripts/chatgpt_troubleshoot.py
         
     - name: Upload Troubleshooting Report
+      if: always() && hashFiles('troubleshooting_report.md') != ''
       uses: actions/upload-artifact@v4
       with:
         name: troubleshooting-report-${{ github.run_number }}
         path: troubleshooting_report.md
+        retention-days: 30
         
     - name: Comment on PR with Troubleshooting
       if: github.event_name == 'pull_request'
