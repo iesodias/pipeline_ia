@@ -1,4 +1,4 @@
-name: Test Pipeline with ChatGPT Troubleshooting
+name: Pipeline with Smart Troubleshooting
 
 on:
   push:
@@ -8,13 +8,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  failing-step:
+  # Job 1: Setup and Dependencies
+  setup:
     runs-on: ubuntu-latest
-    continue-on-error: true
-    outputs:
-      step-outcome: ${{ steps.intentional-failure.outcome }}
-      error-type: ${{ steps.intentional-failure.outputs.error }}
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -24,55 +20,85 @@ jobs:
       with:
         python-version: '3.11'
         
-    - name: Intentional Failure Step
-      id: intentional-failure
-      continue-on-error: true
+    - name: Install dependencies
       run: |
-        echo "Starting deployment process..."
-        echo "Checking database connection..."
+        python -m pip install --upgrade pip
+        pip install requests
         
-        # Simular diferentes tipos de falhas aleatoriamente
-        FAILURE_TYPE=$((RANDOM % 4))
-        
-        case $FAILURE_TYPE in
-          0)
-            echo "❌ ERROR: Database connection failed"
-            echo "Connection timeout after 30 seconds"
-            echo "Host: db.production.com:5432"
-            echo "Database: pipeline_ia_prod"
-            echo "error=database_connection_timeout" >> $GITHUB_OUTPUT
-            exit 1
-            ;;
-          1)
-            echo "❌ ERROR: Missing environment variable"
-            echo "Environment variable 'API_SECRET_KEY' is not set"
-            echo "Required for authentication with external service"
-            echo "error=missing_environment_variable" >> $GITHUB_OUTPUT
-            exit 1
-            ;;
-          2)
-            echo "❌ ERROR: Docker build failed"
-            echo "Failed to build Docker image"
-            echo "Error: COPY failed: no source files were specified"
-            echo "Dockerfile line 15: COPY src/ /app/src/"
-            echo "error=docker_build_failure" >> $GITHUB_OUTPUT
-            exit 1
-            ;;
-          3)
-            echo "❌ ERROR: Permission denied"
-            echo "Access denied to production server"
-            echo "SSH key authentication failed"
-            echo "User: deploy@production-server.com"
-            echo "error=permission_denied" >> $GITHUB_OUTPUT
-            exit 1
-            ;;
-        esac
+    - name: Simulate Setup Failure (Demo)
+      run: |
+        FAILURE_CHANCE=$((RANDOM % 4))
+        if [ $FAILURE_CHANCE -eq 0 ]; then
+          echo "❌ ERROR: Failed to install dependencies"
+          echo "Package 'unknown-package' not found"
+          exit 1
+        fi
+        echo "✅ Setup completed successfully"
 
-
-  chatgpt-troubleshooting:
+  # Job 2: Tests
+  tests:
     runs-on: ubuntu-latest
-    needs: failing-step
-    if: always() && needs.failing-step.outputs.step-outcome == 'failure'
+    needs: setup
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Run tests
+      run: |
+        echo "Running unit tests..."
+        FAILURE_CHANCE=$((RANDOM % 4))
+        if [ $FAILURE_CHANCE -eq 0 ]; then
+          echo "❌ ERROR: Test failed"
+          echo "TestUserAuth.test_login: AssertionError"
+          exit 1
+        fi
+        echo "✅ All tests passed"
+
+  # Job 3: Build
+  build:
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Build application
+      run: |
+        echo "Building application..."
+        FAILURE_CHANCE=$((RANDOM % 4))
+        if [ $FAILURE_CHANCE -eq 0 ]; then
+          echo "❌ ERROR: Build failed"
+          echo "Docker build failed: COPY instruction failed"
+          exit 1
+        fi
+        echo "✅ Build completed successfully"
+
+  # Job 4: Deploy
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - name: Deploy to staging
+      run: |
+        echo "Deploying to staging..."
+        FAILURE_CHANCE=$((RANDOM % 4))
+        if [ $FAILURE_CHANCE -eq 0 ]; then
+          echo "❌ ERROR: Deploy failed"
+          echo "SSH connection timeout to staging server"
+          exit 1
+        fi
+        echo "✅ Deploy completed successfully"
+
+
+  troubleshooting:
+    runs-on: ubuntu-latest
+    needs: [setup, tests, build, deploy]
+    if: always() && (needs.setup.result == 'failure' || needs.tests.result == 'failure' || needs.build.result == 'failure' || needs.deploy.result == 'failure')
     
     steps:
     - name: Checkout code
@@ -92,7 +118,11 @@ jobs:
       id: troubleshoot
       timeout-minutes: 5
       env:
-        ERROR_TYPE: ${{ needs.failing-step.outputs.error-type }}
+        SETUP_STATUS: ${{ needs.setup.result }}
+        TESTS_STATUS: ${{ needs.tests.result }}
+        BUILD_STATUS: ${{ needs.build.result }}
+        DEPLOY_STATUS: ${{ needs.deploy.result }}
+        ERROR_TYPE: 'multi_job_pipeline_failure'
         WORKFLOW_NAME: ${{ github.workflow }}
         REPOSITORY: ${{ github.repository }}
         BRANCH: ${{ github.ref_name }}
