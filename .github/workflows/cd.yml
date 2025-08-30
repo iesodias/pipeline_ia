@@ -20,7 +20,7 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         
@@ -97,7 +97,7 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
         
@@ -118,7 +118,7 @@ jobs:
         python3 scripts/chatgpt_troubleshoot.py
         
     - name: Upload Troubleshooting Report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: troubleshooting-report-${{ github.run_number }}
         path: troubleshooting_report.md
