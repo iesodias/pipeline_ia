@@ -1,4 +1,4 @@
-name: Test Pipeline with ChatGPT Troubleshooting
+name: Pipeline with Smart Troubleshooting
 
 on:
   push:
@@ -14,6 +14,7 @@ jobs:
     outputs:
       step-outcome: ${{ steps.intentional-failure.outcome }}
       error-type: ${{ steps.intentional-failure.outputs.error }}
+      error-logs: ${{ steps.intentional-failure.outputs.logs }}
     
     steps:
     - name: Checkout code
@@ -40,14 +41,29 @@ jobs:
             echo "Connection timeout after 30 seconds"
             echo "Host: db.production.com:5432"
             echo "Database: pipeline_ia_prod"
+            ERROR_LOGS="Connection timeout after 30 seconds to db.production.com:5432
+            psql: error: connection to server at db.production.com (10.0.1.100), port 5432 failed: Connection timed out
+            Is the server running on that host and accepting TCP/IP connections?
+            FATAL: database pipeline_ia_prod does not exist"
             echo "error=database_connection_timeout" >> $GITHUB_OUTPUT
+            echo "logs<<EOF" >> $GITHUB_OUTPUT
+            echo "$ERROR_LOGS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
             exit 1
             ;;
           1)
             echo "❌ ERROR: Missing environment variable"
             echo "Environment variable 'API_SECRET_KEY' is not set"
             echo "Required for authentication with external service"
+            ERROR_LOGS="Environment variable 'API_SECRET_KEY' is not set
+            Required for authentication with external service
+            KeyError: 'API_SECRET_KEY'
+            at authenticate() in auth.py:45
+            Application startup failed"
             echo "error=missing_environment_variable" >> $GITHUB_OUTPUT
+            echo "logs<<EOF" >> $GITHUB_OUTPUT
+            echo "$ERROR_LOGS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
             exit 1
             ;;
           2)
@@ -55,7 +71,14 @@ jobs:
             echo "Failed to build Docker image"
             echo "Error: COPY failed: no source files were specified"
             echo "Dockerfile line 15: COPY src/ /app/src/"
+            ERROR_LOGS="Step 5/12 : COPY src/ /app/src/
+            COPY failed: file not found in build context or excluded by .dockerignore: stat src: file does not exist
+            ERROR: failed to solve: failed to compute cache key: failed to calculate checksum of ref
+            The command '/bin/sh -c COPY src/ /app/src/' returned a non-zero code: 1"
             echo "error=docker_build_failure" >> $GITHUB_OUTPUT
+            echo "logs<<EOF" >> $GITHUB_OUTPUT
+            echo "$ERROR_LOGS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
             exit 1
             ;;
           3)
@@ -63,13 +86,21 @@ jobs:
             echo "Access denied to production server"
             echo "SSH key authentication failed"
             echo "User: deploy@production-server.com"
+            ERROR_LOGS="ssh: connect to host production-server.com port 22: Connection refused
+            Permission denied (publickey)
+            rsync: connection unexpectedly closed (0 bytes received so far) [sender]
+            rsync error: unexplained error (code 255) at io.c(235) [sender=3.1.3]
+            Deploy failed: cannot connect to production-server.com"
             echo "error=permission_denied" >> $GITHUB_OUTPUT
+            echo "logs<<EOF" >> $GITHUB_OUTPUT
+            echo "$ERROR_LOGS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
             exit 1
             ;;
         esac
 
 
-  chatgpt-troubleshooting:
+  troubleshooting:
     runs-on: ubuntu-latest
     needs: failing-step
     if: always() && needs.failing-step.outputs.step-outcome == 'failure'
@@ -93,6 +124,7 @@ jobs:
       timeout-minutes: 5
       env:
         ERROR_TYPE: ${{ needs.failing-step.outputs.error-type }}
+        ERROR_LOGS: ${{ needs.failing-step.outputs.error-logs }}
         WORKFLOW_NAME: ${{ github.workflow }}
         REPOSITORY: ${{ github.repository }}
         BRANCH: ${{ github.ref_name }}
