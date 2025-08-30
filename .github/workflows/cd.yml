@@ -8,9 +8,14 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Job 1: Setup and Dependencies
-  setup:
+  failing-step:
     runs-on: ubuntu-latest
+    continue-on-error: true
+    outputs:
+      step-outcome: ${{ steps.intentional-failure.outcome }}
+      error-type: ${{ steps.intentional-failure.outputs.error }}
+      error-logs: ${{ steps.intentional-failure.outputs.logs }}
+    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -20,85 +25,85 @@ jobs:
       with:
         python-version: '3.11'
         
-    - name: Install dependencies
+    - name: Intentional Failure Step
+      id: intentional-failure
+      continue-on-error: true
       run: |
-        python -m pip install --upgrade pip
-        pip install requests
+        echo "Starting deployment process..."
+        echo "Checking database connection..."
         
-    - name: Simulate Setup Failure (Demo)
-      run: |
-        FAILURE_CHANCE=$((RANDOM % 4))
-        if [ $FAILURE_CHANCE -eq 0 ]; then
-          echo "❌ ERROR: Failed to install dependencies"
-          echo "Package 'unknown-package' not found"
-          exit 1
-        fi
-        echo "✅ Setup completed successfully"
-
-  # Job 2: Tests
-  tests:
-    runs-on: ubuntu-latest
-    needs: setup
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
+        # Simular diferentes tipos de falhas aleatoriamente
+        FAILURE_TYPE=$((RANDOM % 4))
         
-    - name: Run tests
-      run: |
-        echo "Running unit tests..."
-        FAILURE_CHANCE=$((RANDOM % 4))
-        if [ $FAILURE_CHANCE -eq 0 ]; then
-          echo "❌ ERROR: Test failed"
-          echo "TestUserAuth.test_login: AssertionError"
-          exit 1
-        fi
-        echo "✅ All tests passed"
-
-  # Job 3: Build
-  build:
-    runs-on: ubuntu-latest
-    needs: tests
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Build application
-      run: |
-        echo "Building application..."
-        FAILURE_CHANCE=$((RANDOM % 4))
-        if [ $FAILURE_CHANCE -eq 0 ]; then
-          echo "❌ ERROR: Build failed"
-          echo "Docker build failed: COPY instruction failed"
-          exit 1
-        fi
-        echo "✅ Build completed successfully"
-
-  # Job 4: Deploy
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-    - name: Deploy to staging
-      run: |
-        echo "Deploying to staging..."
-        FAILURE_CHANCE=$((RANDOM % 4))
-        if [ $FAILURE_CHANCE -eq 0 ]; then
-          echo "❌ ERROR: Deploy failed"
-          echo "SSH connection timeout to staging server"
-          exit 1
-        fi
-        echo "✅ Deploy completed successfully"
+        case $FAILURE_TYPE in
+          0)
+            echo "❌ ERROR: Database connection failed"
+            echo "Connection timeout after 30 seconds"
+            echo "Host: db.production.com:5432"
+            echo "Database: pipeline_ia_prod"
+            ERROR_LOGS="Connection timeout after 30 seconds to db.production.com:5432
+            psql: error: connection to server at db.production.com (10.0.1.100), port 5432 failed: Connection timed out
+            Is the server running on that host and accepting TCP/IP connections?
+            FATAL: database pipeline_ia_prod does not exist"
+            echo "error=database_connection_timeout" >> $GITHUB_OUTPUT
+            echo "logs<<EOF" >> $GITHUB_OUTPUT
+            echo "$ERROR_LOGS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            exit 1
+            ;;
+          1)
+            echo "❌ ERROR: Missing environment variable"
+            echo "Environment variable 'API_SECRET_KEY' is not set"
+            echo "Required for authentication with external service"
+            ERROR_LOGS="Environment variable 'API_SECRET_KEY' is not set
+            Required for authentication with external service
+            KeyError: 'API_SECRET_KEY'
+            at authenticate() in auth.py:45
+            Application startup failed"
+            echo "error=missing_environment_variable" >> $GITHUB_OUTPUT
+            echo "logs<<EOF" >> $GITHUB_OUTPUT
+            echo "$ERROR_LOGS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            exit 1
+            ;;
+          2)
+            echo "❌ ERROR: Docker build failed"
+            echo "Failed to build Docker image"
+            echo "Error: COPY failed: no source files were specified"
+            echo "Dockerfile line 15: COPY src/ /app/src/"
+            ERROR_LOGS="Step 5/12 : COPY src/ /app/src/
+            COPY failed: file not found in build context or excluded by .dockerignore: stat src: file does not exist
+            ERROR: failed to solve: failed to compute cache key: failed to calculate checksum of ref
+            The command '/bin/sh -c COPY src/ /app/src/' returned a non-zero code: 1"
+            echo "error=docker_build_failure" >> $GITHUB_OUTPUT
+            echo "logs<<EOF" >> $GITHUB_OUTPUT
+            echo "$ERROR_LOGS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            exit 1
+            ;;
+          3)
+            echo "❌ ERROR: Permission denied"
+            echo "Access denied to production server"
+            echo "SSH key authentication failed"
+            echo "User: deploy@production-server.com"
+            ERROR_LOGS="ssh: connect to host production-server.com port 22: Connection refused
+            Permission denied (publickey)
+            rsync: connection unexpectedly closed (0 bytes received so far) [sender]
+            rsync error: unexplained error (code 255) at io.c(235) [sender=3.1.3]
+            Deploy failed: cannot connect to production-server.com"
+            echo "error=permission_denied" >> $GITHUB_OUTPUT
+            echo "logs<<EOF" >> $GITHUB_OUTPUT
+            echo "$ERROR_LOGS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            exit 1
+            ;;
+        esac
 
 
   troubleshooting:
     runs-on: ubuntu-latest
-    needs: [setup, tests, build, deploy]
-    if: always() && (needs.setup.result == 'failure' || needs.tests.result == 'failure' || needs.build.result == 'failure' || needs.deploy.result == 'failure')
+    needs: failing-step
+    if: always() && needs.failing-step.outputs.step-outcome == 'failure'
     
     steps:
     - name: Checkout code
@@ -118,11 +123,8 @@ jobs:
       id: troubleshoot
       timeout-minutes: 5
       env:
-        SETUP_STATUS: ${{ needs.setup.result }}
-        TESTS_STATUS: ${{ needs.tests.result }}
-        BUILD_STATUS: ${{ needs.build.result }}
-        DEPLOY_STATUS: ${{ needs.deploy.result }}
-        ERROR_TYPE: 'multi_job_pipeline_failure'
+        ERROR_TYPE: ${{ needs.failing-step.outputs.error-type }}
+        ERROR_LOGS: ${{ needs.failing-step.outputs.error-logs }}
         WORKFLOW_NAME: ${{ github.workflow }}
         REPOSITORY: ${{ github.repository }}
         BRANCH: ${{ github.ref_name }}

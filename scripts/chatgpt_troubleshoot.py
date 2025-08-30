@@ -9,6 +9,7 @@ import sys
 import json
 import requests
 from datetime import datetime
+import glob
 
 
 def main():
@@ -17,39 +18,19 @@ def main():
     # Capturar variáveis de ambiente
     api_key = os.environ.get('OPENAI_API_KEY')
     error_type = os.environ.get('ERROR_TYPE', 'unknown_error')
-    
-    # Status de cada job
-    setup_status = os.environ.get('SETUP_STATUS', 'unknown')
-    tests_status = os.environ.get('TESTS_STATUS', 'unknown')
-    build_status = os.environ.get('BUILD_STATUS', 'unknown')
-    deploy_status = os.environ.get('DEPLOY_STATUS', 'unknown')
-    
+    error_logs = os.environ.get('ERROR_LOGS', '')
     workflow_name = os.environ.get('WORKFLOW_NAME', 'Unknown Workflow')
     repository = os.environ.get('REPOSITORY', 'Unknown Repository')
     branch = os.environ.get('BRANCH', 'Unknown Branch')
     commit = os.environ.get('COMMIT', 'Unknown Commit')
-    
-    # Identificar quais jobs falharam
-    failed_jobs = []
-    if setup_status == 'failure':
-        failed_jobs.append('setup')
-    if tests_status == 'failure':
-        failed_jobs.append('tests')
-    if build_status == 'failure':
-        failed_jobs.append('build')
-    if deploy_status == 'failure':
-        failed_jobs.append('deploy')
-    
-    failed_jobs_str = ', '.join(failed_jobs) if failed_jobs else 'unknown'
     
     print("🤖 INICIANDO ANÁLISE DE TROUBLESHOOTING COM CHATGPT")
     print("=" * 60)
     print(f"Workflow: {workflow_name}")
     print(f"Repository: {repository}")
     print(f"Branch: {branch}")
-    print(f"Failed Jobs: {failed_jobs_str}")
-    print(f"Setup: {setup_status}, Tests: {tests_status}, Build: {build_status}, Deploy: {deploy_status}")
     print(f"Error Type: {error_type}")
+    print(f"Error Logs Available: {'Yes' if error_logs else 'No'}")
     print("=" * 60)
     
     if not api_key:
@@ -69,32 +50,45 @@ def main():
     - Repositório: {repository}
     - Branch: {branch}
     - Commit: {commit}
-    - Jobs que falharam: {failed_jobs_str}
-    - Status dos Jobs: Setup({setup_status}), Tests({tests_status}), Build({build_status}), Deploy({deploy_status})
     - Tipo de Erro: {error_type}
     - Timestamp: {datetime.now().isoformat()}
     
+    LOGS DE ERRO COMPLETOS:
+    {error_logs}
+    
     DETALHES DO PROBLEMA:
-    A pipeline falhou durante a execução. Os jobs que falharam foram: {failed_jobs_str}. 
-    Baseado no padrão de falhas e status dos jobs, forneça:
+    A pipeline falhou durante a execução. Baseado nos LOGS DE ERRO ESPECÍFICOS acima, forneça uma análise detalhada:
     
     ## 🔍 DIAGNÓSTICO
-    Explique o que provavelmente causou o erro
+    Analise EXATAMENTE as mensagens de erro dos logs acima e explique:
+    - Qual é a causa raiz do problema
+    - Em que linha/comando específico o erro ocorreu
+    - Por que este erro aconteceu
     
     ## 🛠️ SOLUÇÕES IMEDIATAS
-    Liste 3-5 soluções práticas e específicas
+    Baseado nos logs de erro específicos, forneça 3-5 soluções práticas:
+    - Comandos exatos para corrigir o problema
+    - Arquivos que precisam ser modificados
+    - Variáveis de ambiente que podem estar faltando
     
-    ## 🚀 IMPLEMENTAÇÃO
-    Forneça comandos específicos para resolver o problema
+    ## 🚀 IMPLEMENTAÇÃO STEP-BY-STEP
+    Forneça comandos específicos e sequenciais para resolver:
+    ```bash
+    # Exemplo de comandos específicos baseados no erro
+    ```
     
-    ## 🛡️ PREVENÇÃO
-    Sugira como evitar este erro no futuro
+    ## 🛡️ PREVENÇÃO FUTURA
+    Como evitar que este erro específico aconteça novamente:
+    - Verificações pré-commit
+    - Testes locais
+    - Configurações de ambiente
     
-    ## 📋 CHECKLIST
-    - [ ] Item de verificação 1
-    - [ ] Item de verificação 2
+    ## 📋 CHECKLIST DE VERIFICAÇÃO
+    - [ ] Verificar se [item específico do erro] está correto
+    - [ ] Testar [comando específico] localmente
+    - [ ] Confirmar [configuração específica]
     
-    Responda de forma técnica mas clara, focando em ações práticas.
+    IMPORTANTE: Baseie sua resposta EXCLUSIVAMENTE nos logs de erro fornecidos. Seja específico e prático.
     """
     
     # Fazer chamada para OpenAI API
@@ -144,10 +138,16 @@ def main():
             f.write(f"**Repository:** {repository}\n")
             f.write(f"**Branch:** {branch}\n")
             f.write(f"**Commit:** {commit}\n")
-            f.write(f"**Failed Jobs:** {failed_jobs_str}\n")
-            f.write(f"**Job Status:** Setup({setup_status}), Tests({tests_status}), Build({build_status}), Deploy({deploy_status})\n")
             f.write(f"**Error Type:** {error_type}\n")
             f.write(f"**Timestamp:** {datetime.now().isoformat()}\n\n")
+            
+            # Incluir logs de erro no relatório
+            if error_logs:
+                f.write("## Error Logs\n\n")
+                f.write("```\n")
+                f.write(error_logs)
+                f.write("```\n\n")
+            
             f.write("## ChatGPT Analysis\n\n")
             f.write(troubleshooting_advice)
         
