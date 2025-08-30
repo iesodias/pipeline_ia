@@ -23,7 +23,6 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        cache: 'pip'
         
     - name: Intentional Failure Step
       id: intentional-failure
@@ -83,7 +82,6 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
-        cache: 'pip'
         
     - name: Install dependencies
       run: |
@@ -111,39 +109,3 @@ jobs:
         path: troubleshooting_report.md
         retention-days: 30
         
-    - name: Comment on PR with Troubleshooting
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v6
-      with:
-        script: |
-          const fs = require('fs');
-          
-          let reportContent = '';
-          try {
-            reportContent = fs.readFileSync('troubleshooting_report.md', 'utf8');
-          } catch (error) {
-            reportContent = '❌ Não foi possível carregar o relatório de troubleshooting.';
-          }
-          
-          const comment = `## 🤖 Análise Automática de Troubleshooting
-          
-          A pipeline falhou e o ChatGPT analisou o problema:
-          
-          <details>
-          <summary>📋 Clique para ver o relatório completo</summary>
-          
-          \`\`\`markdown
-          ${reportContent}
-          \`\`\`
-          
-          </details>
-          
-          📎 O relatório completo também está disponível nos artefatos da pipeline.
-          `;
-          
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: comment
-          });
